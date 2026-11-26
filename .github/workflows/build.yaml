@@ -215,7 +215,9 @@ jobs:
           printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/up.jks"
           "$bt/apksigner" sign --ks "$RUNNER_TEMP/up.jks" --ks-key-alias "$KS_ALIAS" --ks-pass env:KS_PASS \
             --out out/Termenbox-android.apk "$RUNNER_TEMP/aligned.apk"
-          "$bt/apksigner" verify out/Termenbox-android.apk
+          "$bt/apksigner" verify --print-certs out/Termenbox-android.apk | tee "$RUNNER_TEMP/certs.txt"
+          APK_SHA256=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt")
+          [ -n "$APK_SHA256" ] || { echo "no signer digest printed"; exit 1; }
           rm -f "$RUNNER_TEMP/up.jks"
 
           (cd out && sha256sum * > SHA256SUMS)
@@ -223,7 +225,7 @@ jobs:
             echo "Built from source commit \`$SHA\`."
             echo
             echo "- Linux AppImage: signed (\`.asc\`, key \`termenbox-native.asc\`)."
-            echo "- Android APK: signed with the Termenbox upload key."
+            echo "- Android APK: signed with the Termenbox upload key; signer certificate SHA-256 \`$APK_SHA256\` (public; the app-links file needs it)."
             echo "- Windows installer: **not yet signed**; Windows will warn about an unknown publisher. Check it against \`SHA256SUMS\`."
             echo
             echo '```'; cat out/SHA256SUMS; echo '```'
