@@ -12,6 +12,12 @@ on:
         description: Release tag to publish, for example wrapper-0.1.0
         required: true
         type: string
+      channel:
+        description: Hosted client the apps talk to, and whose GitHub OAuth app signs the person in
+        required: false
+        type: choice
+        options: [stable, beta, nightly]
+        default: stable
 
 permissions: {}
 
@@ -66,7 +72,8 @@ jobs:
       - run: pnpm --filter termenbox-client run build
         env:
           # Public by nature (it is baked into the hosted client too); a repository variable, no secret shared with termenbox-ci.
-          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMENBOX_GITHUB_CLIENT_ID }}
+          VITE_HOSTED_ORIGIN: ${{ inputs.channel == 'stable' && 'https://app.termenbox.dev' || format('https://{0}.app.termenbox.dev', inputs.channel) }}
+          VITE_GITHUB_CLIENT_ID: ${{ inputs.channel == 'nightly' && vars.TERMENBOX_GITHUB_CLIENT_ID_NIGHTLY || inputs.channel == 'beta' && vars.TERMENBOX_GITHUB_CLIENT_ID_BETA || vars.TERMENBOX_GITHUB_CLIENT_ID }}
       - run: pnpm --filter termenbox-native run sync:electron
       - name: Build the AppImage
         working-directory: packages/native/electron
@@ -117,7 +124,8 @@ jobs:
       - run: pnpm --filter termenbox-client run build
         env:
           # Public by nature (it is baked into the hosted client too); a repository variable, no secret shared with termenbox-ci.
-          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMENBOX_GITHUB_CLIENT_ID }}
+          VITE_HOSTED_ORIGIN: ${{ inputs.channel == 'stable' && 'https://app.termenbox.dev' || format('https://{0}.app.termenbox.dev', inputs.channel) }}
+          VITE_GITHUB_CLIENT_ID: ${{ inputs.channel == 'nightly' && vars.TERMENBOX_GITHUB_CLIENT_ID_NIGHTLY || inputs.channel == 'beta' && vars.TERMENBOX_GITHUB_CLIENT_ID_BETA || vars.TERMENBOX_GITHUB_CLIENT_ID }}
       - name: Icons, and no source maps
         run: |
           pnpm --filter termenbox-native run build:assets
@@ -178,7 +186,8 @@ jobs:
       - run: pnpm --filter termenbox-client run build
         env:
           # Public by nature (it is baked into the hosted client too); a repository variable, no secret shared with termenbox-ci.
-          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMENBOX_GITHUB_CLIENT_ID }}
+          VITE_HOSTED_ORIGIN: ${{ inputs.channel == 'stable' && 'https://app.termenbox.dev' || format('https://{0}.app.termenbox.dev', inputs.channel) }}
+          VITE_GITHUB_CLIENT_ID: ${{ inputs.channel == 'nightly' && vars.TERMENBOX_GITHUB_CLIENT_ID_NIGHTLY || inputs.channel == 'beta' && vars.TERMENBOX_GITHUB_CLIENT_ID_BETA || vars.TERMENBOX_GITHUB_CLIENT_ID }}
       - run: pnpm --filter termenbox-native run sync:android
       - name: Build the unsigned release APK
         working-directory: packages/native/android
