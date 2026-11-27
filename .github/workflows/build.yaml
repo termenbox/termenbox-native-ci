@@ -202,9 +202,66 @@ jobs:
           path: out/
           if-no-files-found: error
 
+  # iOS: an unsigned .ipa for sideloading with the installer's own Apple ID (decision 0303). No signing and no entitlements,
+  # because a free Apple ID cannot sign associated domains or push; the company account replaces this later.
+  ios:
+    needs: check-input
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions: {}
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ secrets.SOURCE_APP_ID }}
+          private-key: ${{ secrets.SOURCE_APP_KEY }}
+          owner: termenbox
+          repositories: termenbox-source
+          permission-contents: read
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: termenbox/termenbox-source
+          ref: ${{ inputs.sha }}
+          token: ${{ steps.app.outputs.token }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+        with:
+          version: 10
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter termenbox-client run build
+        env:
+          VITE_HOSTED_ORIGIN: ${{ inputs.channel == 'stable' && 'https://app.termenbox.dev' || format('https://{0}.app.termenbox.dev', inputs.channel) }}
+          VITE_GITHUB_CLIENT_ID: ${{ inputs.channel == 'nightly' && vars.TERMENBOX_GITHUB_CLIENT_ID_NIGHTLY || inputs.channel == 'beta' && vars.TERMENBOX_GITHUB_CLIENT_ID_BETA || vars.TERMENBOX_GITHUB_CLIENT_ID }}
+      - run: pnpm --filter termenbox-native run sync:ios
+      - name: Build the app without signing or entitlements
+        working-directory: packages/native/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release -sdk iphoneos \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" \
+            build
+      - name: Pack the .ipa
+        run: |
+          set -eu
+          app=$(ls -d "$RUNNER_TEMP"/dd/Build/Products/Release-iphoneos/*.app | head -n 1)
+          [ -d "$app" ] || { echo "no .app was built"; exit 1; }
+          ! codesign -d --entitlements - "$app" 2>&1 | grep -q associated-domains || { echo "entitlements leaked into the build"; exit 1; }
+          mkdir -p out "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/out/Termenbox-ios-unsigned.ipa" Payload)
+          ls -l out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: ios
+          path: out/
+          if-no-files-found: error
+
   # The only job that sees a signing key. It runs after an owner approves the `stable` Environment.
   publish:
-    needs: [linux, windows, android]
+    needs: [linux, windows, android, ios]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: stable
@@ -227,7 +284,7 @@ jobs:
           set -eu
           [ -n "$GPG_KEY" ] && [ -n "$KS_B64" ] || { echo "the Linux key and the Android keystore must be in the stable Environment"; exit 1; }
           mkdir out
-          cp in/linux/Termenbox-linux-x64.AppImage in/windows/Termenbox-windows-x64-setup.exe out/
+          cp in/linux/Termenbox-linux-x64.AppImage in/windows/Termenbox-windows-x64-setup.exe in/ios/Termenbox-ios-unsigned.ipa out/
 
           # Linux: detached signature
           export GNUPGHOME="$RUNNER_TEMP/gnupg"; mkdir -m 700 "$GNUPGHOME"
@@ -253,6 +310,7 @@ jobs:
             echo
             echo "- Linux AppImage: signed (\`.asc\`, key \`termenbox-native.asc\`)."
             echo "- Android APK: signed with the Termenbox upload key; signer certificate SHA-256 \`$APK_SHA256\` (public; the app-links file needs it)."
+            echo "- iOS: **unsigned** \`.ipa\` for sideloading with your own Apple ID (AltStore or Sideloadly); it expires after 7 days unless refreshed and has no push. Check it against \`SHA256SUMS\`."
             echo "- Windows installer: **not yet signed**; Windows will warn about an unknown publisher. Check it against \`SHA256SUMS\`."
             echo
             echo '```'; cat out/SHA256SUMS; echo '```'
