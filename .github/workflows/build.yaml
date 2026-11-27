@@ -225,7 +225,7 @@ jobs:
           "$bt/apksigner" sign --ks "$RUNNER_TEMP/up.jks" --ks-key-alias "$KS_ALIAS" --ks-pass env:KS_PASS \
             --out out/Termenbox-android.apk "$RUNNER_TEMP/aligned.apk"
           "$bt/apksigner" verify --print-certs out/Termenbox-android.apk | tee "$RUNNER_TEMP/certs.txt"
-          APK_SHA256=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt")
+          APK_SHA256=$(sed -nE 's/^(Signer #1|V[0-9.]+ Signer): certificate SHA-256 digest: //p' "$RUNNER_TEMP/certs.txt" | head -n 1)
           [ -n "$APK_SHA256" ] || { echo "no signer digest printed"; exit 1; }
           rm -f "$RUNNER_TEMP/up.jks"
 
