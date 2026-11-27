@@ -64,6 +64,9 @@ jobs:
           node-version: '24'
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter termenbox-client run build
+        env:
+          # Public by nature (it is baked into the hosted client too); a repository variable, no secret shared with termenbox-ci.
+          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMENBOX_GITHUB_CLIENT_ID }}
       - run: pnpm --filter termenbox-native run sync:electron
       - name: Build the AppImage
         working-directory: packages/native/electron
@@ -112,6 +115,9 @@ jobs:
           node-version: '24'
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter termenbox-client run build
+        env:
+          # Public by nature (it is baked into the hosted client too); a repository variable, no secret shared with termenbox-ci.
+          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMENBOX_GITHUB_CLIENT_ID }}
       - name: Icons, and no source maps
         run: |
           pnpm --filter termenbox-native run build:assets
@@ -170,6 +176,9 @@ jobs:
           java-version: '21'
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter termenbox-client run build
+        env:
+          # Public by nature (it is baked into the hosted client too); a repository variable, no secret shared with termenbox-ci.
+          VITE_GITHUB_CLIENT_ID: ${{ vars.TERMENBOX_GITHUB_CLIENT_ID }}
       - run: pnpm --filter termenbox-native run sync:android
       - name: Build the unsigned release APK
         working-directory: packages/native/android
